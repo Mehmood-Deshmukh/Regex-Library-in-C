@@ -15,40 +15,48 @@ void run_test(const char* pattern, const char* text, bool expected) {
 int main() {
     printf("Running regex matcher tests:\n\n");
 
-    run_test("abc", "abc", true);
-    run_test("abc", "abcd", true);
-    run_test("abc", "ab", false);
-    run_test("a", "a", true);
-    run_test("a", "b", false);
-    run_test("a", "aa", true);
-    run_test("hello", "hello", true);
-    run_test("hello", "helloo", true);
-    run_test("hello", "hell", false);
+    // Basic character matching (no quantifiers)
+    run_test("abc", "123abc456", true);  // Pattern at index 3
+    run_test("abc", "aabcdefabc", true); // Pattern at index 1
+    run_test("abc", "xabcxabcx", true);  // Pattern at index 1
+    run_test("abc", "abxcyz", false);    // Pattern does not match
+    run_test("ab", "xababx", true);      // Pattern at index 2
 
-    run_test("a.c", "abc", true);
-    run_test("a.c", "acc", true);
-    run_test("a.c", "adc", true);
-    run_test("a.c", "abcc", true);
-    run_test("a.c", "a", false);
-    run_test("a.c", "ab", false);
-    run_test("a.c", "aabbc", false);
-    run_test("a.c", "aCc", true);
-    run_test("a.c", "a c", true);
-    run_test("a.c", "a.c", true);
+    // Wildcard (no quantifiers)
+    run_test("a.c", "xyzabcxyz", true);   // Pattern at index 3
+    run_test("a.c", "a1c a2c a3c", true); // Pattern at index 0, 5, and 10
+    run_test("a.c", "acacac", false);     // Pattern does not match
+    run_test("a.c", "a-c", true);        // Pattern at index 0
+    run_test("a.c", "zaxyc", false);      // Pattern does not match
 
-    run_test("ab+c", "abc", true);
-    run_test("ab+c", "abbc", true);
-    run_test("ab+c", "ac", false);
-    run_test("a+b", "ab", true);
-    run_test("a+b", "aab", true);
-    run_test("a+b", "aaab", true);
-    run_test("a+b", "b", false);
-    run_test("a+b", "a", false);
-    run_test("a+b", "abb", true);
-    run_test("a+b", "aabb", true);
-    run_test("a+b", "aaabb", true);
-    run_test("a+b", "abbb", true);
-    run_test("a+b", "bba", false);
+    // One or more (+)
+    run_test("ab+c", "aabbbbc", true);  // Pattern at index 1
+    run_test("ab+c", "abcabc", true);   // Pattern at index 0 and 3
+    run_test("ab+c", "abcd", true);    // Pattern at index 0
+    run_test("a+b", "aaab", true);      // Pattern at index 0
+    run_test("a+b", "baaa", false);      // Pattern does not match
+
+    // Zero or more (*)
+    run_test("ab*c", "abbbbc", true);   // Pattern at index 0
+    run_test("ab*c", "abcabc", true);   // Pattern at index 0 and 3
+    run_test("ab*c", "cabc", true);     // Pattern at index 0
+    run_test("a*b", "aab", true);       // Pattern at index 0
+    run_test("a*b", "b", true);         // Pattern at index 0
+
+    // Zero or one (?)
+    run_test("ab?c", "abcc", true);     // Pattern at index 0
+    run_test("ab?c", "acac", true);     // Pattern at index 0 and 3
+    run_test("ab?c", "abcabc", true);  // Pattern at index 0
+    run_test("a?b", "aab", true);       // Pattern at index 0
+    run_test("a?b", "b", true);         // Pattern at index 0
+
+    // Combination of quantifiers
+    run_test("a*b+c?", "aabbbc", true); // Pattern at index 0
+    run_test("a*b+c?", "aaabbc", true); // Pattern at index 0
+    run_test("a*b+c?", "aabc", true);   // Pattern at index 0
+    run_test("a*b+c?", "abc", true);    // Pattern at index 0
+    run_test("a*b*c?", "b", true);     // Pattern at index 0
+    run_test("a*b+c?", "ac", false);    // Pattern does not match
 
     return 0;
 }
