@@ -1,5 +1,3 @@
-#include <stdio.h>
-#include <stdbool.h>
 #include "regex.h"
 
 #define GREEN "\033[0;32m"
@@ -7,10 +5,11 @@
 #define RESET "\033[0m"
 
 void run_test(const char* pattern, const char* text, bool expected) {
-    bool result = regex_match(pattern, text);
-    printf("Pattern: %-20s Text: %-20s Expected: %-5s Result: %-5s %s\n",
+    int index;
+    bool result = regex_match(pattern, text, &index);
+    printf("Pattern: %-20s Text: %-20s Expected: %-5s Result: %-5s Index: %d %s\n",
            pattern, text, expected ? "true" : "false", result ? "true" : "false",
-           (result == expected) ? GREEN "PASS" RESET : RED "FAIL" RESET);
+           index, (result == expected) ? GREEN "PASS" RESET : RED "FAIL" RESET);
 }
 
 int main() {

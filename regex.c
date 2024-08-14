@@ -1,63 +1,43 @@
 #include "regex.h"
 
-static bool matchChar(char regexChar, char textChar) {
-    return regexChar == textChar || regexChar == '.';
+bool match_helper(const char* pattern, const char* text) {
+    while (*pattern != '\0' && *text != '\0') {
+        if (*(pattern + 1) == '+') {
+            char match_char = *pattern;
+            if (match_char != '.' && match_char != *text) {
+                return false;
+            }
+            while (*text != '\0' && (match_char == '.' || match_char == *text)) {
+                text++;
+            }
+            pattern += 2;
+        } else if (*pattern == '.' || *pattern == *text) {
+            pattern++;
+            text++;
+        } else {
+            return false;
+        }
+    }
+    
+    while (*pattern != '\0' && *(pattern + 1) == '+') {
+        pattern += 2;
+    }
+
+    return *pattern == '\0';
 }
 
-static bool matchPlusQuantifier(const char *pattern, const char *text) {
-    const char *plusPos = strchr(pattern, '+');
-    if (plusPos == NULL) {
-        return false; 
-    }
+bool regex_match(const char* pattern, const char* text, int* index) {
+    int text_len = strlen(text);
+    int pattern_len = strlen(pattern);
 
-    size_t prefixLength = plusPos - pattern;
-    const char *prefix = pattern;
-    const char *suffix = plusPos + 1;
-
-    while (strncmp(text, prefix, prefixLength) == 0) {
-        const char *t = text + prefixLength;
-
-
-        while (*t) {
-            const char *p = suffix;
-            while (*p && matchChar(*p, *t)) {
-                p++;
-                t++;
-            }
-            if (*p == '\0') {
-                return true;
-            }
-            t++;
-        }
-
-
-        text++;
-    }
-
-    return false;
-}
-
-
-bool regex_match(const char *pattern, const char *text) {
-    if (pattern == NULL || text == NULL) return false;
-
-    if (strchr(pattern, '+')) {
-        return matchPlusQuantifier(pattern, text);
-    }
-
-    while (*text) {
-        const char *p = pattern;
-        const char *t = text;
-
-        while (*p && *t && matchChar(*p, *t)) {
-            p++;
-            t++;
-        }
-
-        if (*p == '\0') {
+    for (int i = 0; i <= text_len; ++i) {
+        const char* sub_text = text + i;
+        if (match_helper(pattern, sub_text)) {
+            *index = i;
             return true;
         }
-        text++;
     }
+
+    *index = -1;
     return false;
 }

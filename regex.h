@@ -2,9 +2,11 @@
 #define REGEX_H
 
 #include <stdio.h>
-#include <string.h>
+#include <stdlib.h>
 #include <stdbool.h>
+#include <string.h>
 
-bool regex_match(const char *pattern, const char *text);
+
+bool regex_match(const char* pattern, const char* text, int* index);
 
 #endif
