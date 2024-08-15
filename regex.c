@@ -1,109 +1,141 @@
-#include <string.h>
-#include <stdbool.h>
-#include "stdio.h"
+#include "regex.h"
 
-#define MAX_STACK_SIZE 1000
 
-typedef struct {
-    const char* pattern;
-    const char* text;
-    const char* text_start;
-    const char* text_end;
-} StackEntry;
+static int matchpattern(regex_token* pattern, const char* text, int* matchlength);
+static int matchstar(regex_token p, regex_token* pattern, const char* text, int* matchlength);
+static int matchplus(regex_token p, regex_token* pattern, const char* text, int* matchlength);
+static int matchone(regex_token p, char c);
 
-typedef struct {
-    StackEntry entries[MAX_STACK_SIZE];
-    int top;
-} Stack;
-
-void stack_init(Stack* s) {
-    s->top = -1;
+int regex_match(const char* pattern, const char* text, int* matchlength) {
+    return regex_match_compiled_pattern(regex_compile(pattern), text, matchlength);
 }
 
-void stack_push(Stack* s, const char* pattern, const char* text, const char* text_start, const char* text_end) {
-    if (s->top < MAX_STACK_SIZE - 1) {
-        s->top++;
-        s->entries[s->top].pattern = pattern;
-        s->entries[s->top].text = text;
-        s->entries[s->top].text_start = text_start;
-        s->entries[s->top].text_end = text_end;
-    }
-}
-
-bool stack_pop(Stack* s, const char** pattern, const char** text, const char** text_start, const char** text_end) {
-    if (s->top >= 0) {
-        *pattern = s->entries[s->top].pattern;
-        *text = s->entries[s->top].text;
-        *text_start = s->entries[s->top].text_start;
-        *text_end = s->entries[s->top].text_end;
-        s->top--;
-        return true;
-    }
-    return false;
-}
-
-bool match_char(const char** pattern, const char** text, const char* text_start, const char* text_end) {
-    if (**pattern == '^') {
-        return *text == text_start;
-    } else if (**pattern == '$') {
-        return *text == text_end;
-    } else if (**pattern == '.') {
-        return **text != '\0' && *text != text_end;
-    } else {
-        return **pattern == **text;
-    }
-}
-
-bool regex_match_helper(const char* pattern, const char* text, const char* text_start, const char* text_end) {
-    Stack stack;
-    stack_init(&stack);
-    stack_push(&stack, pattern, text, text_start, text_end);
-
-    while (stack_pop(&stack, &pattern, &text, &text_start, &text_end)) {
-        if (*pattern == '\0') return true;
-
-
-        if (*(pattern + 1) == '*') {
-            stack_push(&stack, pattern + 2, text, text_start, text_end);
-            if (match_char(&pattern, &text, text_start, text_end)) {
-                stack_push(&stack, pattern, text + 1, text_start, text_end);
-            }
-        } else if (*(pattern + 1) == '+') {
-            if (match_char(&pattern, &text, text_start, text_end)) {
-                stack_push(&stack, pattern, text + 1, text_start, text_end);
-                stack_push(&stack, pattern + 2, text + 1, text_start, text_end);
-            }
-        } else if (*(pattern + 1) == '?') {
-            stack_push(&stack, pattern + 2, text, text_start, text_end);
-            if (match_char(&pattern, &text, text_start, text_end)) {
-                stack_push(&stack, pattern + 2, text + 1, text_start, text_end);
-            }
-        } else if (match_char(&pattern, &text, text_start, text_end)) {
-            stack_push(&stack, pattern + 1, text + 1, text_start, text_end);
+int regex_match_compiled_pattern(regex_t pattern, const char* text, int* matchlength) {
+    *matchlength = 0;
+    if (pattern != 0) {
+        if (pattern[0].type == BEGIN) {
+            return (matchpattern(&pattern[1], text, matchlength)) ? 0 : -1;
+        } else {
+            int idx = -1;
+            do {
+                idx += 1;
+                if (matchpattern(pattern, text, matchlength)) {
+                    if (text[0] == '\0')
+                        return -1;
+                    return idx;
+                }
+            } while (*text++ != '\0');
         }
     }
-
-    return false;
+    return -1;
 }
 
-bool regex_match(const char* pattern, const char* text, int* index) {
-    int text_len = strlen(text);
-    const char* text_end = text + strlen(text);
+regex_t regex_compile(const char* pattern) {
+    static regex_token regex_compiled[MAX_REGEXP_OBJECTS];
+    static unsigned char ccl_buf[MAX_CHAR_CLASS_LEN];
+    int i = 0, j = 0;
 
-    if (pattern[0] == '^') {
-        if (regex_match_helper(pattern + 1, text, text, text_end)) {
-            *index = 0;
-            return true;    
+    while (pattern[i] != '\0' && (j + 1 < MAX_REGEXP_OBJECTS)) {
+        switch (pattern[i]) {
+            case '^': regex_compiled[j].type = BEGIN; break;
+            case '$': regex_compiled[j].type = END; break;
+            case '.': regex_compiled[j].type = DOT; break;
+            case '*': regex_compiled[j].type = STAR; break;
+            case '+': regex_compiled[j].type = PLUS; break;
+            case '?': regex_compiled[j].type = QUESTIONMARK; break;
+            default:
+                regex_compiled[j].type = CHAR;
+                regex_compiled[j].u.ch = pattern[i];
+                break;
         }
-    } else {
-        for (int i = 0; i <= text_len; ++i) {
-            if (regex_match_helper(pattern, text + i, text, text_end)) {
-                *index = i;
-                return true;
-            }
+        if (pattern[i] == 0) return 0;
+        i += 1;
+        j += 1;
+    }
+    regex_compiled[j].type = UNUSED;
+    return (regex_t)regex_compiled;
+}
+
+static int matchone(regex_token p, char c) {
+    return (p.type == DOT) ? (c != '\n' && c != '\r') : (p.u.ch == c);
+}
+
+static int matchstar(regex_token p, regex_token* pattern, const char* text, int* matchlength) {
+    int prelen = *matchlength;
+    const char* prepoint = text;
+    while ((text[0] != '\0') && matchone(p, *text)) {
+        text++;
+        (*matchlength)++;
+    }
+    while (text >= prepoint) {
+        if (matchpattern(pattern, text--, matchlength)) return 1;
+        (*matchlength)--;
+    }
+    *matchlength = prelen;
+    return 0;
+}
+
+static int matchplus(regex_token p, regex_token* pattern, const char* text, int* matchlength) {
+    const char* prepoint = text;
+    while ((text[0] != '\0') && matchone(p, *text)) {
+        text++;
+        (*matchlength)++;
+    }
+    while (text > prepoint) {
+        if (matchpattern(pattern, text--, matchlength)) return 1;
+        (*matchlength)--;
+    }
+    return 0;
+}
+
+static int matchquestion(regex_token p, regex_token* pattern, const char* text, int* matchlength) {
+    if (p.type == UNUSED) return 1;
+    if (matchpattern(pattern, text, matchlength)) return 1;
+    if (*text && matchone(p, *text++)) {
+        if (matchpattern(pattern, text, matchlength)) {
+            (*matchlength)++;
+            return 1;
         }
     }
+    return 0;
+}
 
-    *index = -1;
-    return false;
+static int matchpattern(regex_token* pattern, const char* text, int* matchlength) {
+    int pre = *matchlength;
+    do {
+        if ((pattern[0].type == UNUSED) || (pattern[1].type == QUESTIONMARK)) {
+            return matchquestion(pattern[0], &pattern[2], text, matchlength);
+        } else if (pattern[1].type == STAR) {
+            return matchstar(pattern[0], &pattern[2], text, matchlength);
+        } else if (pattern[1].type == PLUS) {
+            return matchplus(pattern[0], &pattern[2], text, matchlength);
+        } else if ((pattern[0].type == END) && pattern[1].type == UNUSED) {
+            return (text[0] == '\0');
+        }
+        (*matchlength)++;
+    } while ((text[0] != '\0') && matchone(*pattern++, *text++));
+    *matchlength = pre;
+    return 0;
+}
+
+
+void re_print(regex_token* pattern)
+{
+  const char* types[] = { "UNUSED", "DOT", "BEGIN", "END", "QUESTIONMARK", "STAR", "PLUS", "CHAR", "CHAR_CLASS", "INV_CHAR_CLASS", "DIGIT", "NOT_DIGIT", "ALPHA", "NOT_ALPHA", "WHITESPACE", "NOT_WHITESPACE", "BRANCH" };
+
+  int i;
+  int j;
+  char c;
+  for (i = 0; i < MAX_REGEXP_OBJECTS; ++i){
+    if (pattern[i].type == UNUSED){
+      break;
+    }
+
+    printf("type: %s", types[pattern[i].type]);
+
+    if (pattern[i].type == CHAR){
+      printf(" '%c'", pattern[i].u.ch);
+    }
+    printf("\n");
+  }
 }
