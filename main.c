@@ -57,5 +57,36 @@ int main() {
     run_test("T?h*e", "The quick brown fox jumps over thee lazy dog", true);  // Pattern at index 0 and 31
     run_test("f+o?x*y?", "The quick brown foxy jumps over the foxx lazy dog", true);  // Pattern at index 16 and 36
 
+        // New test cases for ^ (start of string)
+    run_test("^The", "The quick brown fox", true);  // Pattern at index 0
+    run_test("^The", "A quick brown fox", false);  // Pattern does not match at start
+    run_test("^qu.ck", "quick brown fox", true);  // Pattern at index 0
+    run_test("^qu.ck", "The quick brown fox", false);  // Pattern does not match at start
+    run_test("^a+b", "aaab quick brown fox", true);  // Pattern at index 0
+    run_test("^a+b", "baab quick brown fox", false);  // Pattern does not match at start
+
+    // New test cases for $ (end of string)
+    run_test("dog$", "The quick brown fox jumps over the lazy dog", true);  // Pattern at end
+    run_test("dog$", "The quick brown dog jumps over the lazy fox", false);  // Pattern does not match at end
+    run_test("lazy.$", "The quick brown fox jumps over the lazy ", true);  // Pattern at end
+    run_test("lazy.$", "The quick brown fox jumps over the lazy dog", false);  // Pattern does not match at end
+    run_test("x+$", "The quick brown foxx", true);  // Pattern at end
+    run_test("x+$", "The quick brown foxxy", false);  // Pattern does not match at end
+
+    // Combination of ^ and $
+    run_test("^The.*dog$", "The quick brown fox jumps over the lazy dog", true);  // Matches entire string
+    run_test("^The.*dog$", "The quick brown fox jumps over the lazy cat", false);  // Does not match entire string
+    run_test("^a+b+c+$", "aaabbbccc", true);  // Matches entire string
+    run_test("^a+b+c+$", "aaabbbcccd", false);  // Does not match entire string
+    run_test("^.$", "a", true);  // Matches single character string
+    run_test("^.$", "ab", false);  // Does not match multi-character string
+
+    // More complex patterns with ^ and $
+    run_test("^The.*fox.*dog$", "The quick brown fox jumps over the lazy dog", true);
+    run_test("^The.*fox.*dog$", "The quick brown fox jumps over the lazy cat", false);
+    run_test("^a*b+c?d*", "bbbcdddd nice", true);
+    run_test("a*b*cd*$", "i like to say aaabbbcdddd", true);
+    run_test("^a*b+c?d*$", "aaabbbccdddde", false);
+
     return 0;
 }
