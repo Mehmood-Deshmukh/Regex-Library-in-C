@@ -1,54 +1,85 @@
-#include "regex.h"
+#include <string.h>
+#include <stdbool.h>
 
-bool match_helper(const char* pattern, const char* text) {
-    while (*pattern != '\0') {
+#define MAX_STACK_SIZE 1000
+
+typedef struct {
+    const char* pattern;
+    const char* text;
+} StackEntry;
+
+typedef struct {
+    StackEntry entries[MAX_STACK_SIZE];
+    int top;
+} Stack;
+
+void stack_init(Stack* s) {
+    s->top = -1;
+}
+
+void stack_push(Stack* s, const char* pattern, const char* text) {
+    if (s->top < MAX_STACK_SIZE - 1) {
+        s->top++;
+        s->entries[s->top].pattern = pattern;
+        s->entries[s->top].text = text;
+    }
+}
+
+bool stack_pop(Stack* s, const char** pattern, const char** text) {
+    if (s->top >= 0) {
+        *pattern = s->entries[s->top].pattern;
+        *text = s->entries[s->top].text;
+        s->top--;
+        return true;
+    }
+    return false;
+}
+
+bool match_char(const char** pattern, const char** text) {
+    if (**pattern == '.') {
+        return **text != '\0';
+    } else {
+        return **pattern == **text;
+    }
+}
+
+bool regex_match_helper(const char* pattern, const char* text) {
+    Stack stack;
+    stack_init(&stack);
+    stack_push(&stack, pattern, text);
+
+    while (stack_pop(&stack, &pattern, &text)) {
+        if (*pattern == '\0') return true;
+        if (*text == '\0') continue;
+
         if (*(pattern + 1) == '*') {
-            char match_char = *pattern;
-            pattern += 2;
-            while (*text != '\0' && (match_char == '.' || match_char == *text)) {
-                if (match_helper(pattern, text)) return true;
-                text++;
+            stack_push(&stack, pattern + 2, text);
+            if (match_char(&pattern, &text)) {
+                stack_push(&stack, pattern, text + 1);
             }
-            continue;
         } else if (*(pattern + 1) == '+') {
-            char match_char = *pattern;
-            if (*text == '\0' || (match_char != '.' && match_char != *text)) return false;
-            pattern += 2;
-            do {
-                text++;
-                if (match_helper(pattern, text)) return true;
-            } while (*text != '\0' && (match_char == '.' || match_char == *text));
-            return false;
-        } else if (*(pattern + 1) == '?') {
-            char match_char = *pattern;
-            pattern += 2;
-            if (*text != '\0' && (match_char == '.' || match_char == *text)) {
-                if (match_helper(pattern, text + 1)) return true;
+            if (match_char(&pattern, &text)) {
+                stack_push(&stack, pattern, text + 1);
+                stack_push(&stack, pattern + 2, text + 1);
             }
-            if (match_helper(pattern, text)) return true;
-            return false;
-        }
-
-        if (*text == '\0') return false;
-
-        if (*pattern == '.' || *pattern == *text) {
-            pattern++;
-            text++;
-        } else {
-            return false;
+        } else if (*(pattern + 1) == '?') {
+            stack_push(&stack, pattern + 2, text);
+            if (match_char(&pattern, &text)) {
+                stack_push(&stack, pattern + 2, text + 1);
+            }
+        } else if (match_char(&pattern, &text)) {
+            stack_push(&stack, pattern + 1, text + 1);
         }
     }
 
-    return *pattern == '\0';
+    return false;
 }
-
 
 bool regex_match(const char* pattern, const char* text, int* index) {
     int text_len = strlen(text);
 
     for (int i = 0; i <= text_len; ++i) {
-        const char* sub_text = text + i;
-        if (match_helper(pattern, sub_text)) {
+        if (regex_match_helper(pattern, text + i)) {
             *index = i;
             return true;
         }

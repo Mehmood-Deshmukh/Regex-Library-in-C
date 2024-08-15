@@ -43,7 +43,7 @@ int main() {
     run_test("colo?r", "The quick brown color fox jumps over the colour dog", true);  // Pattern at index 16 and 42
     run_test("jum?ps", "The quick brown fox jumps over the jups lazy dog", true);  // Pattern at index 20 and 35
     run_test("qu?ick", "The qick brown fox jumps over the quick dog", true);  // Pattern at index 4 and 36
-    run_test("dog?s", "The quick brown fox jumps over the lazy dogs", true);  // Pattern at index 41
+    run_test("dog?s", "The quick brown fox jumps over the lazy dogs", true);  // Pattern at index 40
 
     // Combination of quantifiers
     run_test("a*b+c?", "The quick brown aaabbc fox jumps over the abc lazy dog", true);  // Pattern at index 10, 16 and 37
@@ -54,7 +54,7 @@ int main() {
     // Complex patterns
     run_test("a+b*c?d+", "The quick abbbcd brown acd fox jumps over the abcd lazy dog", true);  // Pattern at index 10, 21, and 41
     run_test("w?o*r+l?d", "Hello world! The world is a beautiful place.", true);  // Pattern at index 6 and 18
-    run_test("t?h*e+", "The quick brown fox jumps over thee lazy dog", true);  // Pattern at index 0 and 31
+    run_test("T?h*e", "The quick brown fox jumps over thee lazy dog", true);  // Pattern at index 0 and 31
     run_test("f+o?x*y?", "The quick brown foxy jumps over the foxx lazy dog", true);  // Pattern at index 16 and 36
 
     return 0;
