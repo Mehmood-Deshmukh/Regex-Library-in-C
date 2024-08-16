@@ -1,28 +1,27 @@
 #include "regex.h"
 
 
-static int matchpattern(regex_token* pattern, const char* text, int* matchlength);
-static int matchstar(regex_token p, regex_token* pattern, const char* text, int* matchlength);
-static int matchplus(regex_token p, regex_token* pattern, const char* text, int* matchlength);
-static int matchone(regex_token p, char c);
+static int matchPattern(regex_token* compiledPattern, const char* inputText, int* matchedLength);
+static int matchStar(regex_token token, regex_token* compiledPattern, const char* inputText, int* matchedLength);
+static int matchPlus(regex_token token, regex_token* compiledPattern, const char* inputText, int* matchedLength);
+static int matchSingleCharacter(regex_token token, char character);
 
-int regex_match(const char* pattern, const char* text, int* matchlength) {
-    return regex_match_compiled_pattern(regex_compile(pattern), text, matchlength);
+int regex_match(const char* pattern, const char* text, int* matchLength) {
+    regex_t compiledPattern = regex_compile(pattern);
+    return regex_match_compiled_pattern(compiledPattern, text, matchLength);
 }
 
-int regex_match_compiled_pattern(regex_t pattern, const char* text, int* matchlength) {
-    *matchlength = 0;
-    if (pattern != 0) {
-        if (pattern[0].type == BEGIN) {
-            return (matchpattern(&pattern[1], text, matchlength)) ? 0 : -1;
+int regex_match_compiled_pattern(regex_t compiledPattern, const char* text, int* matchLength) {
+    *matchLength = 0;
+    if (compiledPattern != NULL) {
+        if (compiledPattern[0].type == BEGIN) {
+            return matchPattern(&compiledPattern[1], text, matchLength) ? 0 : -1;
         } else {
-            int idx = -1;
+            int textPosition = -1;
             do {
-                idx += 1;
-                if (matchpattern(pattern, text, matchlength)) {
-                    if (text[0] == '\0')
-                        return -1;
-                    return idx;
+                textPosition++;
+                if (matchPattern(compiledPattern, text, matchLength)) {
+                    return text[0] == '\0' ? -1 : textPosition;
                 }
             } while (*text++ != '\0');
         }
@@ -31,111 +30,155 @@ int regex_match_compiled_pattern(regex_t pattern, const char* text, int* matchle
 }
 
 regex_t regex_compile(const char* pattern) {
-    static regex_token regex_compiled[MAX_REGEXP_OBJECTS];
-    static unsigned char ccl_buf[MAX_CHAR_CLASS_LEN];
+    static regex_token compiledPattern[MAX_REGEXP_OBJECTS];
+    static unsigned char charClassBuffer[MAX_CHAR_CLASS_LEN];
     int i = 0, j = 0;
 
     while (pattern[i] != '\0' && (j + 1 < MAX_REGEXP_OBJECTS)) {
         switch (pattern[i]) {
-            case '^': regex_compiled[j].type = BEGIN; break;
-            case '$': regex_compiled[j].type = END; break;
-            case '.': regex_compiled[j].type = DOT; break;
-            case '*': regex_compiled[j].type = STAR; break;
-            case '+': regex_compiled[j].type = PLUS; break;
-            case '?': regex_compiled[j].type = QUESTIONMARK; break;
+            case '^': compiledPattern[j].type = BEGIN; break;
+            case '$': compiledPattern[j].type = END; break;
+            case '.': compiledPattern[j].type = DOT; break;
+            case '*': compiledPattern[j].type = STAR; break;
+            case '+': compiledPattern[j].type = PLUS; break;
+            case '?': compiledPattern[j].type = QUESTIONMARK; break;
+            case '\\':
+                if (pattern[i + 1] != '\0') {
+                    i++;
+                    switch (pattern[i]) {
+                        case 'd': compiledPattern[j].type = DIGIT; break;
+                        case 'D': compiledPattern[j].type = NOT_DIGIT; break;
+                        case 'w': compiledPattern[j].type = ALPHA; break;
+                        case 'W': compiledPattern[j].type = NOT_ALPHA; break;
+                        case 's': compiledPattern[j].type = WHITESPACE; break;
+                        case 'S': compiledPattern[j].type = NOT_WHITESPACE; break;
+                        default:
+                            compiledPattern[j].type = CHAR;
+                            compiledPattern[j].u.ch = pattern[i];
+                            break;
+                    }
+                } else {
+                    compiledPattern[j].type = CHAR;
+                    compiledPattern[j].u.ch = '\\';
+                }
+                break;
             default:
-                regex_compiled[j].type = CHAR;
-                regex_compiled[j].u.ch = pattern[i];
+                compiledPattern[j].type = CHAR;
+                compiledPattern[j].u.ch = pattern[i];
                 break;
         }
-        if (pattern[i] == 0) return 0;
-        i += 1;
-        j += 1;
+        i++;
+        j++;
     }
-    regex_compiled[j].type = UNUSED;
-    return (regex_t)regex_compiled;
+    compiledPattern[j].type = UNUSED;
+    return (regex_t)compiledPattern;
 }
 
-static int matchone(regex_token p, char c) {
-    return (p.type == DOT) ? (c != '\n' && c != '\r') : (p.u.ch == c);
+
+static int matchSingleCharacter(regex_token token, char character) {
+    switch (token.type) {
+        case DOT:
+            return (character != '\n' && character != '\r');
+        case DIGIT:
+            return isdigit(character);
+        case NOT_DIGIT:
+            return !isdigit(character);
+        case ALPHA:
+            return isalnum(character) || (character == '_');
+        case NOT_ALPHA:
+            return !isalnum(character) && (character != '_');
+        case WHITESPACE:
+            return isspace(character);
+        case NOT_WHITESPACE:
+            return !isspace(character);
+        default:
+            return token.u.ch == character;
+    }
 }
 
-static int matchstar(regex_token p, regex_token* pattern, const char* text, int* matchlength) {
-    int prelen = *matchlength;
-    const char* prepoint = text;
-    while ((text[0] != '\0') && matchone(p, *text)) {
-        text++;
-        (*matchlength)++;
+
+static int matchStar(regex_token token, regex_token* compiledPattern, const char* inputText, int* matchedLength) {
+    int initialMatchLength = *matchedLength;
+    const char* initialText = inputText;
+
+    while (*inputText != '\0' && matchSingleCharacter(token, *inputText)) {
+        inputText++;
+        (*matchedLength)++;
     }
-    while (text >= prepoint) {
-        if (matchpattern(pattern, text--, matchlength)) return 1;
-        (*matchlength)--;
+
+    while (inputText >= initialText) {
+        if (matchPattern(compiledPattern, inputText--, matchedLength)) return 1;
+        (*matchedLength)--;
     }
-    *matchlength = prelen;
+    *matchedLength = initialMatchLength;
     return 0;
 }
 
-static int matchplus(regex_token p, regex_token* pattern, const char* text, int* matchlength) {
-    const char* prepoint = text;
-    while ((text[0] != '\0') && matchone(p, *text)) {
-        text++;
-        (*matchlength)++;
+static int matchPlus(regex_token token, regex_token* compiledPattern, const char* inputText, int* matchedLength) {
+    const char* initialText = inputText;
+
+    while (*inputText != '\0' && matchSingleCharacter(token, *inputText)) {
+        inputText++;
+        (*matchedLength)++;
     }
-    while (text > prepoint) {
-        if (matchpattern(pattern, text--, matchlength)) return 1;
-        (*matchlength)--;
+
+    while (inputText > initialText) {
+        if (matchPattern(compiledPattern, inputText--, matchedLength)) return 1;
+        (*matchedLength)--;
     }
     return 0;
 }
 
-static int matchquestion(regex_token p, regex_token* pattern, const char* text, int* matchlength) {
-    if (p.type == UNUSED) return 1;
-    if (matchpattern(pattern, text, matchlength)) return 1;
-    if (*text && matchone(p, *text++)) {
-        if (matchpattern(pattern, text, matchlength)) {
-            (*matchlength)++;
+static int matchQuestion(regex_token token, regex_token* compiledPattern, const char* inputText, int* matchedLength) {
+    if (token.type == UNUSED) return 1;
+    if (matchPattern(compiledPattern, inputText, matchedLength)) return 1;
+    if (*inputText && matchSingleCharacter(token, *inputText++)) {
+        if (matchPattern(compiledPattern, inputText, matchedLength)) {
+            (*matchedLength)++;
             return 1;
         }
     }
     return 0;
 }
 
-static int matchpattern(regex_token* pattern, const char* text, int* matchlength) {
-    int pre = *matchlength;
+static int matchPattern(regex_token* compiledPattern, const char* inputText, int* matchedLength) {
+    int initialMatchLength = *matchedLength;
+
     do {
-        if ((pattern[0].type == UNUSED) || (pattern[1].type == QUESTIONMARK)) {
-            return matchquestion(pattern[0], &pattern[2], text, matchlength);
-        } else if (pattern[1].type == STAR) {
-            return matchstar(pattern[0], &pattern[2], text, matchlength);
-        } else if (pattern[1].type == PLUS) {
-            return matchplus(pattern[0], &pattern[2], text, matchlength);
-        } else if ((pattern[0].type == END) && pattern[1].type == UNUSED) {
-            return (text[0] == '\0');
+        if (compiledPattern[0].type == UNUSED || compiledPattern[1].type == QUESTIONMARK) {
+            return matchQuestion(compiledPattern[0], &compiledPattern[2], inputText, matchedLength);
+        } else if (compiledPattern[1].type == STAR) {
+            return matchStar(compiledPattern[0], &compiledPattern[2], inputText, matchedLength);
+        } else if (compiledPattern[1].type == PLUS) {
+            return matchPlus(compiledPattern[0], &compiledPattern[2], inputText, matchedLength);
+        } else if (compiledPattern[0].type == END && compiledPattern[1].type == UNUSED) {
+            return (inputText[0] == '\0');
         }
-        (*matchlength)++;
-    } while ((text[0] != '\0') && matchone(*pattern++, *text++));
-    *matchlength = pre;
+        (*matchedLength)++;
+    } while (*inputText != '\0' && matchSingleCharacter(*compiledPattern++, *inputText++));
+
+    *matchedLength = initialMatchLength;
     return 0;
 }
 
+void regex_print(regex_token* compiledPattern) {
+    const char* tokenTypes[] = {
+        "UNUSED", "DOT", "BEGIN", "END", "QUESTIONMARK", "STAR", "PLUS", 
+        "CHAR", "DIGIT", "NOT_DIGIT", "ALPHA", "NOT_ALPHA", "WHITESPACE", 
+        "NOT_WHITESPACE"
+    };
 
-void re_print(regex_token* pattern)
-{
-  const char* types[] = { "UNUSED", "DOT", "BEGIN", "END", "QUESTIONMARK", "STAR", "PLUS", "CHAR", "CHAR_CLASS", "INV_CHAR_CLASS", "DIGIT", "NOT_DIGIT", "ALPHA", "NOT_ALPHA", "WHITESPACE", "NOT_WHITESPACE", "BRANCH" };
+    for (int i = 0; i < MAX_REGEXP_OBJECTS; ++i) {
+        if (compiledPattern[i].type == UNUSED) {
+            break;
+        }
 
-  int i;
-  int j;
-  char c;
-  for (i = 0; i < MAX_REGEXP_OBJECTS; ++i){
-    if (pattern[i].type == UNUSED){
-      break;
+        printf("Type: %s", tokenTypes[compiledPattern[i].type]);
+
+        if (compiledPattern[i].type == CHAR) {
+            printf(" '%c'", compiledPattern[i].u.ch);
+        }
+        printf("\n");
     }
-
-    printf("type: %s", types[pattern[i].type]);
-
-    if (pattern[i].type == CHAR){
-      printf(" '%c'", pattern[i].u.ch);
-    }
-    printf("\n");
-  }
 }
+
