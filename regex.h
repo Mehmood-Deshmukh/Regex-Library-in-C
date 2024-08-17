@@ -29,6 +29,7 @@
 #define REGEX_C
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
 
@@ -55,5 +56,6 @@ typedef struct regex_token* regex_t;
 regex_t regex_compile(const char* pattern);
 int regex_match_compiled_pattern(regex_t pattern, const char* text, int* matchlength);
 int regex_match(const char* pattern, const char* text, int* matchlength);
+char* regex_replace(const char* pattern, const char* text, const char* replacement);
 
 #endif

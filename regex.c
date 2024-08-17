@@ -28,7 +28,6 @@ int regex_match_compiled_pattern(regex_t compiledPattern, const char* text, int*
     }
     return -1;
 }
-
 regex_t regex_compile(const char* pattern) {
     static regex_token compiledPattern[MAX_REGEXP_OBJECTS];
     int i = 0, j = 0;
@@ -44,22 +43,25 @@ regex_t regex_compile(const char* pattern) {
             compiledPattern[j].type = inverted ? INV_CHAR_CLASS : CHAR_CLASS;
             int k = 0;
             while (pattern[i] != ']' && pattern[i] != '\0') {
-                if (pattern[i] == '-') {
-                    // Handle ranges
-                    if (k > 0 && pattern[i + 1] != ']' && pattern[i + 1] != '\0') {
-                        char start = compiledPattern[j].u.char_class[k - 1];
-                        char end = pattern[i + 1];
-                        for (char c = start; c <= end; c++) {
-                            if (k < MAX_CHAR_CLASS_LEN - 1) {
-                                compiledPattern[j].u.char_class[k++] = c;
-                            }
-                        }
-                        i += 2; // Skip the '-' and the end character
-                        continue;
+                if (pattern[i] == '\\') {
+                    if (k < MAX_CHAR_CLASS_LEN - 2) {
+                        compiledPattern[j].u.char_class[k++] = pattern[i++];
+                        compiledPattern[j].u.char_class[k++] = pattern[i++];
+                    } else {
+                        i += 2;  // Skip if no space
                     }
-                }
-                if (k < MAX_CHAR_CLASS_LEN - 1) {
-                    compiledPattern[j].u.char_class[k++] = pattern[i++];
+                } else if (pattern[i] == '-' && k > 0 && pattern[i + 1] != ']' && pattern[i + 1] != '\0') {
+                    if (k < MAX_CHAR_CLASS_LEN - 1) {
+                        compiledPattern[j].u.char_class[k++] = pattern[i++];
+                    } else {
+                        i++;  // Skip if no space
+                    }
+                } else {
+                    if (k < MAX_CHAR_CLASS_LEN - 1) {
+                        compiledPattern[j].u.char_class[k++] = pattern[i++];
+                    } else {
+                        i++;  // Skip if no space
+                    }
                 }
             }
             if (pattern[i] == ']') {
@@ -123,41 +125,50 @@ regex_t regex_compile(const char* pattern) {
     compiledPattern[j].type = UNUSED;
     return (regex_t)compiledPattern;
 }
-
 static int matchSingleCharacter(regex_token token, char character) {
-    if (token.type == CHAR_CLASS) {
-        for (int i = 0; token.u.char_class[i] != '\0'; i++) {
-            if (token.u.char_class[i] == character) {
-                return 1;
-            }
-        }
-        return 0;
-    } else if (token.type == INV_CHAR_CLASS) {
-        for (int i = 0; token.u.char_class[i] != '\0'; i++) {
-            if (token.u.char_class[i] == character) {
-                return 0;
-            }
-        }
-        return 1;
-    }
-    
     switch (token.type) {
+        case CHAR_CLASS:
+        case INV_CHAR_CLASS: {
+            int match = 0;
+            for (int i = 0; token.u.char_class[i] != '\0'; i++) {
+                if (token.u.char_class[i] == '\\') {
+                    i++;
+                    switch (token.u.char_class[i]) {
+                        case 's': match |= isspace((unsigned char)character); break;
+                        case 'd': match |= isdigit((unsigned char)character); break;
+                        case 'w': match |= isalnum((unsigned char)character) || character == '_'; break;
+                        case 'W': match |= !(isalnum((unsigned char)character) || character == '_'); break;
+                        case 'D': match |= !isdigit((unsigned char)character); break;
+                        case 'S': match |= !isspace((unsigned char)character); break;
+                        default: match |= (token.u.char_class[i] == character);
+                    }
+                } else if (token.u.char_class[i] == '-' && i > 0 && token.u.char_class[i+1] != '\0') {
+                    match |= (character >= token.u.char_class[i-1] && character <= token.u.char_class[i+1]);
+                    i++;
+                } else {
+                    match |= (token.u.char_class[i] == character);
+                }
+            }
+            return (token.type == CHAR_CLASS) ? match : !match;
+        }
         case DOT:
             return (character != '\n' && character != '\r');
         case DIGIT:
-            return isdigit(character);
+            return isdigit((unsigned char)character);
         case NOT_DIGIT:
-            return !isdigit(character);
+            return !isdigit((unsigned char)character);
         case ALPHA:
-            return isalnum(character) || (character == '_');
+            return isalnum((unsigned char)character) || (character == '_');
         case NOT_ALPHA:
-            return !isalnum(character) && (character != '_');
+            return !(isalnum((unsigned char)character) || (character == '_'));
         case WHITESPACE:
-            return isspace(character);
+            return isspace((unsigned char)character);
         case NOT_WHITESPACE:
-            return !isspace(character);
-        default:
+            return !isspace((unsigned char)character);
+        case CHAR:
             return token.u.ch == character;
+        default:
+            return 0;
     }
 }
 
@@ -204,25 +215,37 @@ static int matchQuestion(regex_token token, regex_token* compiledPattern, const 
     }
     return 0;
 }
-
 static int matchPattern(regex_token* compiledPattern, const char* inputText, int* matchedLength) {
     int initialMatchLength = *matchedLength;
+    const char* initialInputText = inputText;
 
     do {
-        if (compiledPattern[0].type == UNUSED || compiledPattern[1].type == QUESTIONMARK) {
+        if (compiledPattern[0].type == UNUSED) {
+            return 1;
+        } else if (compiledPattern[0].type == END) {
+            return (*inputText == '\0' || *inputText == '\n');
+        } else if (compiledPattern[1].type == QUESTIONMARK) {
             return matchQuestion(compiledPattern[0], &compiledPattern[2], inputText, matchedLength);
         } else if (compiledPattern[1].type == STAR) {
             return matchStar(compiledPattern[0], &compiledPattern[2], inputText, matchedLength);
         } else if (compiledPattern[1].type == PLUS) {
             return matchPlus(compiledPattern[0], &compiledPattern[2], inputText, matchedLength);
-        } else if (compiledPattern[0].type == END && compiledPattern[1].type == UNUSED) {
-            return (inputText[0] == '\0');
         }
+        
+        if (*inputText == '\0') {
+            *matchedLength = initialMatchLength;
+            return 0;
+        }
+        
+        if (!matchSingleCharacter(*compiledPattern, *inputText)) {
+            *matchedLength = initialMatchLength;
+            return 0;
+        }
+        
+        compiledPattern++;
+        inputText++;
         (*matchedLength)++;
-    } while (*inputText != '\0' && matchSingleCharacter(*compiledPattern++, *inputText++));
-
-    *matchedLength = initialMatchLength;
-    return 0;
+    } while (1);
 }
 
 void regex_print(regex_token* compiledPattern) {
@@ -250,4 +273,45 @@ void regex_print(regex_token* compiledPattern) {
         }
         printf("\n");
     }
+}
+char* regex_replace(const char* pattern, const char* text, const char* replacement) {
+    if (!pattern || !text || !replacement) {
+        return NULL;
+    }
+
+    int matchLength = 0;
+    const char* searchText = text;
+    size_t resultBufferSize = strlen(text) + 1;
+    char* result = (char*)malloc(resultBufferSize);
+    if (!result) {
+        perror("Failed to allocate memory");
+        return NULL;
+    }
+    result[0] = '\0';
+
+    while (*searchText != '\0') {
+        int matchLength = 0;
+        int matchPosition = regex_match(pattern, searchText, &matchLength);
+
+        if (matchPosition >= 0) {
+            resultBufferSize += strlen(replacement) - matchLength;
+            char* newResult = (char*)realloc(result, resultBufferSize);
+            if (!newResult) {
+                perror("Failed to reallocate memory");
+                free(result);
+                return NULL;
+            }
+            result = newResult;
+
+            strncat(result, text, matchPosition);
+            strcat(result, replacement);
+            searchText += matchPosition + matchLength;
+            text = searchText;
+        } else {
+            strcat(result, searchText);
+            break;
+        }
+    }
+
+    return result;
 }
