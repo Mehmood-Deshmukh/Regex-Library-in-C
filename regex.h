@@ -20,10 +20,11 @@
  *   '\s'       Whitespace, [ \t\n\r\f\v]
  *   '\S'       Non-whitespace
  *   '[abc]'    Character class, match if one of {'a', 'b', 'c'}
+ *  '[^abc]'   Inverted class, match if NOT one of {'a', 'b', 'c'}
+ * '[a-zA-Z]' Character ranges, the character set of the ranges { a-z | A-Z }
  *  ---------
  *
  */
-
 #ifndef REGEX_C
 #define REGEX_C
 
@@ -36,7 +37,7 @@
 
 enum {
     UNUSED, DOT, BEGIN, END, QUESTIONMARK, STAR, PLUS, CHAR,
-    DIGIT, NOT_DIGIT, ALPHA, NOT_ALPHA, WHITESPACE, NOT_WHITESPACE, CHAR_CLASS
+    DIGIT, NOT_DIGIT, ALPHA, NOT_ALPHA, WHITESPACE, NOT_WHITESPACE, CHAR_CLASS, INV_CHAR_CLASS
 };
 
 typedef struct regex_token {
@@ -47,10 +48,12 @@ typedef struct regex_token {
     } u;
 } regex_token;
 
-typedef regex_token* regex_t;
+
+
+typedef struct regex_token* regex_t;
 
 regex_t regex_compile(const char* pattern);
-int regex_match_compiled_pattern(regex_t pattern, const char* text, int* matchLength);
-int regex_match(const char* pattern, const char* text, int* matchLength);
+int regex_match_compiled_pattern(regex_t pattern, const char* text, int* matchlength);
+int regex_match(const char* pattern, const char* text, int* matchlength);
 
 #endif

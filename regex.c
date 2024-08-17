@@ -1,6 +1,5 @@
 #include "regex.h"
 
-
 static int matchPattern(regex_token* compiledPattern, const char* inputText, int* matchedLength);
 static int matchStar(regex_token token, regex_token* compiledPattern, const char* inputText, int* matchedLength);
 static int matchPlus(regex_token token, regex_token* compiledPattern, const char* inputText, int* matchedLength);
@@ -34,14 +33,31 @@ regex_t regex_compile(const char* pattern) {
     static regex_token compiledPattern[MAX_REGEXP_OBJECTS];
     int i = 0, j = 0;
     int inCharClass = 0;
+    int inverted = 0;
 
     while (pattern[i] != '\0' && (j + 1 < MAX_REGEXP_OBJECTS)) {
         if (pattern[i] == '[') {
             inCharClass = 1;
             i++;
-            compiledPattern[j].type = CHAR_CLASS;
+            inverted = (pattern[i] == '^');
+            if (inverted) i++;
+            compiledPattern[j].type = inverted ? INV_CHAR_CLASS : CHAR_CLASS;
             int k = 0;
             while (pattern[i] != ']' && pattern[i] != '\0') {
+                if (pattern[i] == '-') {
+                    // Handle ranges
+                    if (k > 0 && pattern[i + 1] != ']' && pattern[i + 1] != '\0') {
+                        char start = compiledPattern[j].u.char_class[k - 1];
+                        char end = pattern[i + 1];
+                        for (char c = start; c <= end; c++) {
+                            if (k < MAX_CHAR_CLASS_LEN - 1) {
+                                compiledPattern[j].u.char_class[k++] = c;
+                            }
+                        }
+                        i += 2; // Skip the '-' and the end character
+                        continue;
+                    }
+                }
                 if (k < MAX_CHAR_CLASS_LEN - 1) {
                     compiledPattern[j].u.char_class[k++] = pattern[i++];
                 }
@@ -116,6 +132,13 @@ static int matchSingleCharacter(regex_token token, char character) {
             }
         }
         return 0;
+    } else if (token.type == INV_CHAR_CLASS) {
+        for (int i = 0; token.u.char_class[i] != '\0'; i++) {
+            if (token.u.char_class[i] == character) {
+                return 0;
+            }
+        }
+        return 1;
     }
     
     switch (token.type) {
@@ -206,7 +229,7 @@ void regex_print(regex_token* compiledPattern) {
     const char* tokenTypes[] = {
         "UNUSED", "DOT", "BEGIN", "END", "QUESTIONMARK", "STAR", "PLUS", 
         "CHAR", "DIGIT", "NOT_DIGIT", "ALPHA", "NOT_ALPHA", "WHITESPACE", 
-        "NOT_WHITESPACE", "CHAR_CLASS"
+        "NOT_WHITESPACE", "CHAR_CLASS", "INV_CHAR_CLASS"
     };
 
     for (int i = 0; i < MAX_REGEXP_OBJECTS; ++i) {
@@ -218,7 +241,7 @@ void regex_print(regex_token* compiledPattern) {
 
         if (compiledPattern[i].type == CHAR) {
             printf(" '%c'", compiledPattern[i].u.ch);
-        } else if (compiledPattern[i].type == CHAR_CLASS) {
+        } else if (compiledPattern[i].type == CHAR_CLASS || compiledPattern[i].type == INV_CHAR_CLASS) {
             printf(" [");
             for (int j = 0; compiledPattern[i].u.char_class[j] != '\0'; j++) {
                 printf("%c", compiledPattern[i].u.char_class[j]);

@@ -101,8 +101,28 @@ char* test_vector[][4] =
     { OK,  "[meh]+[mood]+",                     "mehmood",          (char*) 7      },
     { NOK, "[abc]+",                     "d",              (char*) 0      },
 
+    { OK,  "[^abc]+",                       "aaamehmaaabbccc",              (char*) 4     },
+    { OK,  "[^abc]",                      "d",                            (char*) 1     },
+    { OK,  "[^aeiou]+",                 "bcdfgh",                        (char*) 6     },
+    { OK,  "[^abc]+def",               "xyzdef",                         (char*) 6     },
+    { OK,  "[^abc]+b",                 "xyzb",                           (char*) 4     },
+    { OK,  "[d-z]+b",                 "xyzb",                           (char*) 4     },
     //complex 
-    { OK,  "\\w+@\\w+\\.com",                       "my email is mehmood@email.com",              (char*) 17      },
+    { OK,  "\\w+@\\w+\\.com",  "my email is mehmood@email.com",   (char*) 17      },
+    /* Complex pattern: \s+\w+@\d+ */
+    { OK,  "\\s+\\w+@\\d+",                "My email is test123@456",  (char*) 12 }, 
+    { OK,  "\\s+\\w+@\\d+",                "Contact me at john_doe@12345", (char*) 15 }, 
+    { NOK, "\\s+\\w+@\\d+",                "No email here",      (char*) 0  },
+    { OK, "\\s+\\w+@\\d+",                "Please reach out to alice@42", (char*) 9 }, 
+    { NOK, "\\s+\\w+@\\d+",                "hello world!",      (char*) 0  }, 
+
+    /* More complex pattern with multiple matches */
+    { OK,  "\\s+\\w+@\\d+",                "Emails: jane_doe@99 and bob_smith@2020", (char*) 12 }, 
+    { OK,  "\\s+\\w+@\\d+",                "First contact: alice@1; second: charlie@123", (char*) 8 }, 
+
+    /* Edge case with surrounding text */
+    { OK,  "\\s+\\w+@\\d+",                "Here is a number john_doe@789 in the middle of the text.", (char*) 13 }, 
+    { NOK, "\\s+\\w+@\\d+",                "john_doe@789 without spaces before it", (char*) 0  }, 
 };
 
 void regex_print(regex_t);
