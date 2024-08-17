@@ -4,6 +4,7 @@
 static int matchPattern(regex_token* compiledPattern, const char* inputText, int* matchedLength);
 static int matchStar(regex_token token, regex_token* compiledPattern, const char* inputText, int* matchedLength);
 static int matchPlus(regex_token token, regex_token* compiledPattern, const char* inputText, int* matchedLength);
+static int matchQuestion(regex_token token, regex_token* compiledPattern, const char* inputText, int* matchedLength);
 static int matchSingleCharacter(regex_token token, char character);
 
 int regex_match(const char* pattern, const char* text, int* matchLength) {
@@ -31,51 +32,92 @@ int regex_match_compiled_pattern(regex_t compiledPattern, const char* text, int*
 
 regex_t regex_compile(const char* pattern) {
     static regex_token compiledPattern[MAX_REGEXP_OBJECTS];
-    static unsigned char charClassBuffer[MAX_CHAR_CLASS_LEN];
     int i = 0, j = 0;
+    int inCharClass = 0;
 
     while (pattern[i] != '\0' && (j + 1 < MAX_REGEXP_OBJECTS)) {
-        switch (pattern[i]) {
-            case '^': compiledPattern[j].type = BEGIN; break;
-            case '$': compiledPattern[j].type = END; break;
-            case '.': compiledPattern[j].type = DOT; break;
-            case '*': compiledPattern[j].type = STAR; break;
-            case '+': compiledPattern[j].type = PLUS; break;
-            case '?': compiledPattern[j].type = QUESTIONMARK; break;
-            case '\\':
-                if (pattern[i + 1] != '\0') {
-                    i++;
-                    switch (pattern[i]) {
-                        case 'd': compiledPattern[j].type = DIGIT; break;
-                        case 'D': compiledPattern[j].type = NOT_DIGIT; break;
-                        case 'w': compiledPattern[j].type = ALPHA; break;
-                        case 'W': compiledPattern[j].type = NOT_ALPHA; break;
-                        case 's': compiledPattern[j].type = WHITESPACE; break;
-                        case 'S': compiledPattern[j].type = NOT_WHITESPACE; break;
-                        default:
-                            compiledPattern[j].type = CHAR;
-                            compiledPattern[j].u.ch = pattern[i];
-                            break;
-                    }
-                } else {
-                    compiledPattern[j].type = CHAR;
-                    compiledPattern[j].u.ch = '\\';
+        if (pattern[i] == '[') {
+            inCharClass = 1;
+            i++;
+            compiledPattern[j].type = CHAR_CLASS;
+            int k = 0;
+            while (pattern[i] != ']' && pattern[i] != '\0') {
+                if (k < MAX_CHAR_CLASS_LEN - 1) {
+                    compiledPattern[j].u.char_class[k++] = pattern[i++];
                 }
-                break;
-            default:
+            }
+            if (pattern[i] == ']') {
+                i++;
+            }
+            compiledPattern[j].u.char_class[k] = '\0';
+            j++;
+            inCharClass = 0;
+        } else if (pattern[i] == '^') {
+            compiledPattern[j].type = BEGIN;
+            i++;
+            j++;
+        } else if (pattern[i] == '$') {
+            compiledPattern[j].type = END;
+            i++;
+            j++;
+        } else if (pattern[i] == '.') {
+            compiledPattern[j].type = DOT;
+            i++;
+            j++;
+        } else if (pattern[i] == '*') {
+            compiledPattern[j].type = STAR;
+            i++;
+            j++;
+        } else if (pattern[i] == '+') {
+            compiledPattern[j].type = PLUS;
+            i++;
+            j++;
+        } else if (pattern[i] == '?') {
+            compiledPattern[j].type = QUESTIONMARK;
+            i++;
+            j++;
+        } else if (pattern[i] == '\\') {
+            if (pattern[i + 1] != '\0') {
+                i++;
+                switch (pattern[i]) {
+                    case 'd': compiledPattern[j].type = DIGIT; break;
+                    case 'D': compiledPattern[j].type = NOT_DIGIT; break;
+                    case 'w': compiledPattern[j].type = ALPHA; break;
+                    case 'W': compiledPattern[j].type = NOT_ALPHA; break;
+                    case 's': compiledPattern[j].type = WHITESPACE; break;
+                    case 'S': compiledPattern[j].type = NOT_WHITESPACE; break;
+                    default:
+                        compiledPattern[j].type = CHAR;
+                        compiledPattern[j].u.ch = pattern[i];
+                        break;
+                }
+            } else {
                 compiledPattern[j].type = CHAR;
-                compiledPattern[j].u.ch = pattern[i];
-                break;
+                compiledPattern[j].u.ch = '\\';
+            }
+            i++;
+            j++;
+        } else {
+            compiledPattern[j].type = CHAR;
+            compiledPattern[j].u.ch = pattern[i];
+            i++;
+            j++;
         }
-        i++;
-        j++;
     }
     compiledPattern[j].type = UNUSED;
     return (regex_t)compiledPattern;
 }
 
-
 static int matchSingleCharacter(regex_token token, char character) {
+    if (token.type == CHAR_CLASS) {
+        for (int i = 0; token.u.char_class[i] != '\0'; i++) {
+            if (token.u.char_class[i] == character) {
+                return 1;
+            }
+        }
+        return 0;
+    }
+    
     switch (token.type) {
         case DOT:
             return (character != '\n' && character != '\r');
@@ -95,7 +137,6 @@ static int matchSingleCharacter(regex_token token, char character) {
             return token.u.ch == character;
     }
 }
-
 
 static int matchStar(regex_token token, regex_token* compiledPattern, const char* inputText, int* matchedLength) {
     int initialMatchLength = *matchedLength;
@@ -165,7 +206,7 @@ void regex_print(regex_token* compiledPattern) {
     const char* tokenTypes[] = {
         "UNUSED", "DOT", "BEGIN", "END", "QUESTIONMARK", "STAR", "PLUS", 
         "CHAR", "DIGIT", "NOT_DIGIT", "ALPHA", "NOT_ALPHA", "WHITESPACE", 
-        "NOT_WHITESPACE"
+        "NOT_WHITESPACE", "CHAR_CLASS"
     };
 
     for (int i = 0; i < MAX_REGEXP_OBJECTS; ++i) {
@@ -177,8 +218,13 @@ void regex_print(regex_token* compiledPattern) {
 
         if (compiledPattern[i].type == CHAR) {
             printf(" '%c'", compiledPattern[i].u.ch);
+        } else if (compiledPattern[i].type == CHAR_CLASS) {
+            printf(" [");
+            for (int j = 0; compiledPattern[i].u.char_class[j] != '\0'; j++) {
+                printf("%c", compiledPattern[i].u.char_class[j]);
+            }
+            printf("]");
         }
         printf("\n");
     }
 }
-

@@ -92,6 +92,17 @@ char* test_vector[][4] =
   { OK, "\\d+\\D*\\d+.*\\d+", "12ab34__56zz789", (char*) 15 },
   { OK, "\\S+\\s+\\w+\\W+\\d+", "Hello World! 123", (char*) 16 },
   { OK, "^\\w+\\s+\\d+:\\d+\\s+\\S+$", "hello 12:30 world!", (char*) 18 },
+
+  // tests for classes
+    { OK,  "[abc]",                       "a",              (char*) 1      },
+    { OK,  "[abc]",                       "b",              (char*) 1      },
+    { OK,  "[abc]",                       "c",              (char*) 1      },
+    { NOK, "[abc]",                       "d",              (char*) 0      },
+    { OK,  "[meh]+[mood]+",                     "mehmood",          (char*) 7      },
+    { NOK, "[abc]+",                     "d",              (char*) 0      },
+
+    //complex 
+    { OK,  "\\w+@\\w+\\.com",                       "my email is mehmood@email.com",              (char*) 17      },
 };
 
 void regex_print(regex_t);
