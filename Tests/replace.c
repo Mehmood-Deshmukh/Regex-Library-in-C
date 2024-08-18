@@ -1,7 +1,4 @@
-#include "regex.h"
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
+#include "../regex.h"
 
 #define OK ((char *)1)
 #define NOK ((char *)0)
@@ -25,20 +22,27 @@ char *test_replace[][5] =
     {OK, "^The", "A", "The quick brown fox jumps over the lazy dog", "A quick brown fox jumps over the lazy dog"},
     {OK, "dog$", "cat", "The quick brown fox jumps over the lazy dog", "The quick brown fox jumps over the lazy cat"},
 
-
     /* Replacements with multiple occurrences */
     {OK, "over", "under", "The quick brown fox jumps over the lazy dog over the hill", "The quick brown fox jumps under the lazy dog under the hill"},
 
+    /* Edge cases and special characters */
     {NOK, "elephant", "giraffe", "The quick brown fox jumps over the lazy dog", "The quick brown fox jumps over the lazy dog"},
     {NOK, "^fox", "cat", "The quick brown fox jumps over the lazy dog", "The quick brown fox jumps over the lazy dog"},
 
+    /* Regex patterns for various scenarios */
     {OK, "\\[\\w*\\]", "", "This is a [test] string with [brackets].", "This is a  string with ."},
     {OK, "https?://\\S+", "", "Visit https://example.com", "Visit "},
     {OK, "www\\.\\S+\\.com", "", "Visit www.example.com", "Visit "},
 
+    /* Removing HTML tags and punctuation */
     {OK, "</?\\w*>", "", "<html><body>This is a test</body></html>", "This is a test"},
     {OK, "[,\\.\"]", "", "Remove punctuation, e.g., commas, periods.", "Remove punctuation eg commas periods"},
     {OK, "\\w*\\d\\w*", "", "Test 123 and 456", "Test  and "},
+
+    /* Additional test cases */
+    {OK, "cat", "dog", "I have a cat and a cat.", "I have a dog and a dog."},
+    {NOK, "not_in_text", "replace", "No match here", "No match here"},
+    {OK, "[0-9]+", "#", "The numbers are 123 and 456", "The numbers are # and #"},
 };
 
 void regex_print(regex_t);
