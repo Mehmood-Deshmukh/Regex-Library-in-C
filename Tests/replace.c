@@ -53,10 +53,10 @@ int main()
     char *pattern;
     char *replacement;
     char *result;
-    size_t ntests = sizeof(test_replace) / sizeof(*test_replace);
-    size_t npassed = 0;
-    size_t nfailed = 0;
-    size_t i;
+    int ntests = sizeof(test_replace) / sizeof(*test_replace);
+    int npassed = 0;
+    int nfailed = 0;
+    int i;
 
     for (i = 0; i < ntests; ++i)
     {
@@ -94,9 +94,9 @@ int main()
     }
 
     printf(COLOR_RESET);
-    printf(COLOR_GREEN "%zu/%zu test cases passed.\n" COLOR_RESET, npassed, ntests);
+    printf(COLOR_GREEN "%d/%d test cases passed.\n" COLOR_RESET, npassed, ntests);
     if(nfailed)
-        printf(COLOR_RED "%zu/%zu test cases failed.\n" COLOR_RESET, nfailed, ntests);
+        printf(COLOR_RED "%d/%d test cases failed.\n" COLOR_RESET, nfailed, ntests);
 
     return nfailed;
 }

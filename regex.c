@@ -40,14 +40,12 @@ int regex_match_compiled_pattern(regex_t compiledPattern, const char* text, int*
 regex_t regex_compile(const char* pattern) {
     static regex_token compiledPattern[MAX_REGEXP_OBJECTS]; //this array stores the compiled pattern tokens
     int i = 0, j = 0;
-    int inCharClass = 0; // to check if we are in a character class ([abc])
     int inverted = 0; // to check if character class is inverted
 
     while (pattern[i] != '\0' && (j + 1 < MAX_REGEXP_OBJECTS)) {
 
         // handling classes and invert classes
         if (pattern[i] == '[') {
-            inCharClass = 1;
             i++;
             inverted = (pattern[i] == '^');
             if (inverted) i++;
@@ -80,7 +78,6 @@ regex_t regex_compile(const char* pattern) {
             }
             compiledPattern[j].u.char_class[k] = '\0';
             j++;
-            inCharClass = 0;
         } else if (pattern[i] == '^') { // handling beginning anchor
             compiledPattern[j].type = BEGIN;
             i++;
@@ -242,7 +239,6 @@ static int matchQuestion(regex_token token, regex_token* compiledPattern, const 
 // Helper function to match a pattern against the input text
 static int matchPattern(regex_token* compiledPattern, const char* inputText, int* matchedLength) {
     int initialMatchLength = *matchedLength;
-    const char* initialInputText = inputText;
 
     do {
         if (compiledPattern[0].type == UNUSED) {
@@ -319,7 +315,6 @@ char* regex_replace(const char* pattern, const char* text, const char* replaceme
     result[0] = '\0';
 
     while (*searchText != '\0') {
-        int matchLength = 0;
         int matchPosition = regex_match(pattern, searchText, &matchLength);
 
         if (matchPosition >= 0) {

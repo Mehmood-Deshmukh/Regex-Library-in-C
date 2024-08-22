@@ -27,7 +27,7 @@ char *test_vector[][4] = {
         {OK, "a*", "b", (char *)0},
         {OK, "a*b", "aaab", (char *)4},
 
-        /* Plus (+) - Matches one or more (greedy) */
+        /* Pzus (+) - Matches one or more (greedy) */
         {OK, "a+", "aaa", (char *)3},
         {NOK, "a+", "b", (char *)0},
         {OK, "a+b", "aaab", (char *)4},
@@ -208,9 +208,9 @@ int main(){
     int should_fail;
     int length;
     int correctlen;
-    size_t ntests = sizeof(test_vector) / sizeof(*test_vector);
-    size_t nfailed = 0;
-    size_t i;
+    int ntests = sizeof(test_vector) / sizeof(*test_vector);
+    int nfailed = 0;
+    int i;
 
     for (i = 0; i < ntests; ++i){
         pattern = test_vector[i][1];
@@ -225,7 +225,7 @@ int main(){
                 printf(COLOR_RED);
                 printf("\n");
                 regex_print(regex_compile(pattern));
-                fprintf(stderr, "[%lu/%lu]: pattern '%s' matched '%s' unexpectedly, matched %i chars. \n", (i + 1), ntests, pattern, text, length);
+                fprintf(stderr, "[%d/%d]: pattern '%s' matched '%s' unexpectedly, matched %i chars. \n", (i + 1), ntests, pattern, text, length);
                 printf(COLOR_RESET);
                 nfailed += 1;
             }
@@ -235,26 +235,26 @@ int main(){
                 printf(COLOR_RED);
                 printf("\n");
                 regex_print(regex_compile(pattern));
-                fprintf(stderr, "[%lu/%lu]: pattern '%s' didn't match '%s' as expected. \n", (i + 1), ntests, pattern, text);
+                fprintf(stderr, "[%d/%d]: pattern '%s' didn't match '%s' as expected. \n", (i + 1), ntests, pattern, text);
                 printf(COLOR_RESET);
                 nfailed += 1;
             }
             else if (length != correctlen){
                 printf(COLOR_RED);
-                fprintf(stderr, "[%lu/%lu]: pattern '%s' matched '%i' chars of '%s'; expected '%i'. \n", (i + 1), ntests, pattern, length, text, correctlen);
+                fprintf(stderr, "[%d/%d]: pattern '%s' matched '%i' chars of '%s'; expected '%i'. \n", (i + 1), ntests, pattern, length, text, correctlen);
                 printf(COLOR_RESET);
                 nfailed += 1;
             }
             else {
                 printf(COLOR_GREEN);
-                printf("[%lu/%lu]: pattern '%s' matched '%s' as expected. \n", (i + 1), ntests, pattern, text);
+                printf("[%d/%d]: pattern '%s' matched '%s' as expected. \n", (i + 1), ntests, pattern, text);
                 printf(COLOR_RESET);
             }
         }
     }
 
     printf("\n");
-    printf(COLOR_GREEN "%lu/%lu tests succeeded.\n" COLOR_RESET, ntests - nfailed, ntests);
+    printf(COLOR_GREEN "%d/%d tests succeeded.\n" COLOR_RESET, ntests - nfailed, ntests);
     printf("\n");
 
     return nfailed;
